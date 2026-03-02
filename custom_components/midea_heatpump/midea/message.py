@@ -469,8 +469,8 @@ def parse_c0_status_body(body: bytes) -> dict:
         [1]     = 0x01 sub-type (bit 0 = power)
         [2]     = DHW target temperature (linear: value - 99)
         [3-10]  = zeros (unused zone/feature fields)
-        [11]    = T1: DHW tank temperature (XC0 sensor, drifts)
-        [12]    = T2: water circuit temperature (XC0 sensor, drifts)
+        [11]    = T2: water circuit temperature (XC0 sensor, drifts)
+        [12]    = T1: DHW tank temperature (XC0 sensor, drifts)
         [13-17] = zeros
         [18]    = heating water flow target (raw/2 + 9, NOT XC0)
         [19-22] = zeros
@@ -491,9 +491,9 @@ def parse_c0_status_body(body: bytes) -> dict:
 
     # Temperature sensors (using XC0 encoding: (v-50)/2)
     if len(body) > 11 and body[11] != 0x00:
-        state["t1_dhw_tank"] = _decode_temp_xc0(body[11])
+        state["t2_water_circuit"] = _decode_temp_xc0(body[11])
     if len(body) > 12 and body[12] != 0x00:
-        state["t2_water_circuit"] = _decode_temp_xc0(body[12])
+        state["t1_dhw_tank"] = _decode_temp_xc0(body[12])
 
     # byte[18]: heating water flow target (NOT outdoor temp, NOT XC0)
     if len(body) > 18 and body[18] != 0x00:

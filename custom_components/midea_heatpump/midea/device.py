@@ -3,7 +3,6 @@
 import logging
 import socket
 import threading
-import time
 from datetime import datetime, timezone
 
 from .security import (
@@ -117,7 +116,7 @@ class MideaATWDevice:
 
         self._security = LocalSecurity()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(10.0)
+        self._sock.settimeout(3.0)
         self._sock.connect((self._ip, self._port))
 
         request = self._security.encode_8370(self._token, MSGTYPE_HANDSHAKE_REQUEST)
@@ -152,9 +151,8 @@ class MideaATWDevice:
         packet = PacketBuilder.build(self._device_id, command, self._next_msg_id())
         encrypted = self._security.encode_8370(packet, MSGTYPE_ENCRYPTED_REQUEST)
         self._sock.send(encrypted)
-        time.sleep(0.3)
 
-        self._sock.settimeout(5.0)
+        self._sock.settimeout(2.0)
         data = self._sock.recv(4096)
         if not data:
             return []

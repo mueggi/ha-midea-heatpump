@@ -37,7 +37,7 @@ class MideaHeatingClimate(MideaHeatPumpEntity, ClimateEntity):
     _attr_hvac_modes = [HVACMode.HEAT]
     _attr_min_temp = MIN_HEAT_TEMP
     _attr_max_temp = MAX_HEAT_TEMP
-    _attr_target_temperature_step = 0.5
+    _attr_target_temperature_step = 1
 
     def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:
         super().__init__(coordinator, "heating", "Heating")
