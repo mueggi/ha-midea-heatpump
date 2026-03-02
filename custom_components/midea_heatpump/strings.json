@@ -3,7 +3,38 @@
     "step": {
       "user": {
         "title": "Midea ATW Heat Pump",
-        "description": "Enter connection details. Get token and key using the midea_cli.py tool.",
+        "description": "Choose how to set up your heat pump.",
+        "data": {
+          "setup_method": "Setup method"
+        }
+      },
+      "cloud": {
+        "title": "Cloud Login",
+        "description": "Enter your Midea cloud credentials to automatically retrieve device details.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "server": "Cloud server"
+        }
+      },
+      "select_device": {
+        "title": "Select Device",
+        "description": "Choose your heat pump from the devices found in your cloud account.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "network": {
+        "title": "LAN Connection",
+        "description": "Enter the local network address of your heat pump.",
+        "data": {
+          "host": "IP Address",
+          "port": "Port"
+        }
+      },
+      "manual": {
+        "title": "Manual Setup",
+        "description": "Enter connection details manually. Get token and key using the midea_cli.py tool.",
         "data": {
           "host": "IP Address",
           "port": "Port",
@@ -14,7 +45,10 @@
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to device. Check IP, token, and key."
+      "cannot_connect": "Cannot connect to device. Check IP, token, and key.",
+      "login_failed": "Cloud login failed. Check your email, password, and server.",
+      "no_devices": "No heat pump devices (type 0xC3) found in your cloud account.",
+      "token_failed": "Could not retrieve token and key for the selected device."
     },
     "abort": {
       "already_configured": "This device is already configured."

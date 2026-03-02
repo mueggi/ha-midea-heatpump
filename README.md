@@ -24,17 +24,6 @@ Other Midea ATW heat pumps using device type 0xC3 may work but are untested.
 
 **Assumed state** means the device accepts the SET command but doesn't report the value back in status queries. HA tracks what was last sent.
 
-## Prerequisites
-
-You need a **token** and **key** for your device. These are obtained from the Midea cloud API (NetHome Plus or MSmartHome) and are specific to your device. The companion CLI tool in [the heatpump project](https://github.com/mueggi/ha-midea-heatpump) can retrieve them:
-
-```bash
-# Example using the CLI tool (separate repo)
-python midea_cli.py cloud-login --account you@example.com --password yourpass --save-config
-```
-
-The token and key are saved to `~/.midea_heatpump.json`. You'll enter them during the integration setup in Home Assistant.
-
 ## Installation
 
 ### HACS (recommended)
@@ -52,15 +41,32 @@ The token and key are saved to `~/.midea_heatpump.json`. You'll enter them durin
 
 ## Configuration
 
+### Cloud Login (recommended)
+
+The easiest way to set up the integration. It retrieves the device token and key automatically from the Midea cloud.
+
 1. Go to **Settings > Devices & Services > Add Integration**
 2. Search for **Midea ATW Heat Pump**
-3. Enter your connection details:
+3. Select **Cloud Login**
+4. Enter your Midea cloud credentials (email, password) and select your cloud server (MSmartHome or NetHome Plus)
+5. Select your heat pump from the list of devices found in your account
+6. Enter the LAN IP address of your heat pump controller
+7. The integration validates the connection and completes setup
+
+### Manual Setup
+
+If cloud login is not available, you can enter connection details manually. You'll need a token and key obtained via the `midea_cli.py` tool or another method.
+
+1. Go to **Settings > Devices & Services > Add Integration**
+2. Search for **Midea ATW Heat Pump**
+3. Select **Manual Setup**
+4. Enter your connection details:
    - **IP Address** — LAN IP of the heat pump controller
    - **Port** — TCP port (default: 6444)
    - **Device ID** — numeric device ID from the cloud API
    - **Token** — hex string from cloud API
    - **Key** — hex string from cloud API
-4. The integration validates the connection before saving. If it fails, check that the IP is reachable and the token/key are correct.
+5. The integration validates the connection before saving. If it fails, check that the IP is reachable and the token/key are correct.
 
 ## How It Works
 
