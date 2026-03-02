@@ -17,12 +17,12 @@ Other Midea ATW heat pumps using device type 0xC3 may work but are untested.
 | DHW Tank Temperature | `sensor` | Yes | - | Live sensor |
 | Water Circuit Temperature | `sensor` | Yes | - | Live sensor |
 | Outdoor Temperature | `sensor` | Yes | - | Live sensor |
-| Zone 1 Target Temperature | `number` | - | Yes | Assumed state (untested) |
-| Operating Mode | `select` | - | - | Stub (Heat / DHW / Heat+DHW) |
+| Zone 1 Target Temperature | `number` | - | Yes | Assumed state |
 | ECO Mode | `switch` | - | Yes | Assumed state |
-| Turbo DHW | `switch` | - | - | Stub |
+| Silent Mode | `switch` | - | Yes | Assumed state |
+| Disinfect | `switch` | - | Yes | Assumed state |
 
-**Assumed state** means HA tracks what was last sent but cannot read the value back from the device. **Stub** means the SET command hasn't been decoded yet — the entity only updates locally.
+**Assumed state** means the device accepts the SET command but doesn't report the value back in status queries. HA tracks what was last sent.
 
 ## Prerequisites
 

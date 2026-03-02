@@ -15,6 +15,8 @@ from .message import (
     build_query_status,
     build_set_command,
     build_set_eco,
+    build_set_silent,
+    build_set_disinfect,
     parse_response,
 )
 
@@ -181,16 +183,16 @@ class MideaATWDevice:
             self._do_connect()
             return self._send_and_receive(command)
 
-    def _get_outdoor_temp(self) -> float | None:
-        """Query outdoor temp for the SET echo field. Caller must hold lock."""
+    def _query_current_state(self) -> dict:
+        """Query current state for echoing fields in SET. Caller must hold lock."""
         try:
             responses = self._send_and_receive(build_query_status())
             for r in responses:
-                if "t3_outdoor" in r:
-                    return r["t3_outdoor"]
+                if r.get("body_type") == 0xC0:
+                    return r
         except (ConnectionError, OSError):
             pass
-        return None
+        return {}
 
     def query_status(self) -> dict:
         """Query device status. Returns state dict. Thread-safe."""
@@ -202,24 +204,35 @@ class MideaATWDevice:
             return responses[0] if responses else {}
 
     def set_attribute(self, name: str, value) -> dict:
-        """Set a device attribute. Returns response dict. Thread-safe."""
-        with self._lock:
-            if name == "dhw_target_temp":
-                outdoor_temp = self._get_outdoor_temp()
-                kwargs = {"dhw_target_temp": float(value)}
-                if outdoor_temp is not None:
-                    kwargs["outdoor_temp"] = outdoor_temp
-                cmd = build_set_command(**kwargs)
+        """Set a device attribute. Returns response dict. Thread-safe.
 
-            elif name == "zone1_target_temp":
-                outdoor_temp = self._get_outdoor_temp()
-                kwargs = {"zone1_target_temp": float(value)}
-                if outdoor_temp is not None:
-                    kwargs["outdoor_temp"] = outdoor_temp
+        IMPORTANT: 0x7F is NOT a safe "no change" sentinel for this device.
+        It gets interpreted as a temperature value and overwrites DHW target.
+        We always echo the current DHW target when setting other fields.
+        """
+        with self._lock:
+            if name in ("dhw_target_temp", "zone1_target_temp"):
+                # Query current state to echo DHW + outdoor temp
+                current = self._query_current_state()
+                kwargs = {name: float(value)}
+                # Always echo current DHW to prevent overwrite
+                if name != "dhw_target_temp":
+                    dhw = current.get("dhw_target_temp")
+                    if dhw is not None:
+                        kwargs["dhw_target_temp"] = dhw
+                outdoor = current.get("t3_outdoor")
+                if outdoor is not None:
+                    kwargs["outdoor_temp"] = outdoor
                 cmd = build_set_command(**kwargs)
 
             elif name == "eco_mode":
                 cmd = build_set_eco(eco_mode=bool(value))
+
+            elif name == "silent_mode":
+                cmd = build_set_silent(silent_mode=bool(value))
+
+            elif name == "disinfect":
+                cmd = build_set_disinfect(disinfect=bool(value))
 
             else:
                 raise ValueError(f"Unsupported attribute: {name}")
