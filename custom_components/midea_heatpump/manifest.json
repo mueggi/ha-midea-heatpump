@@ -1,9 +1,9 @@
 {
   "domain": "midea_heatpump",
   "name": "Midea ATW Heat Pump",
-  "codeowners": [],
+  "codeowners": ["@mueggi"],
   "config_flow": true,
-  "documentation": "https://github.com/mueggler/ha-midea-heatpump",
+  "documentation": "https://github.com/mueggi/ha-midea-heatpump",
   "iot_class": "local_polling",
   "requirements": ["pycryptodome>=3.15"],
   "version": "0.1.0"
