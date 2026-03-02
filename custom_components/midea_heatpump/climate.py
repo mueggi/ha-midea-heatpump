@@ -5,7 +5,6 @@ import logging
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
-    HVACAction,
     HVACMode,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -39,9 +38,11 @@ class MideaZone1Climate(MideaHeatPumpEntity, ClimateEntity):
     _attr_min_temp = MIN_ZONE_TEMP
     _attr_max_temp = MAX_ZONE_TEMP
     _attr_target_temperature_step = 1
+    _attr_assumed_state = True
 
     def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:
         super().__init__(coordinator, "zone1_climate", "Zone 1 Heating")
+        self._target_temp: float | None = None
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -49,31 +50,16 @@ class MideaZone1Climate(MideaHeatPumpEntity, ClimateEntity):
         return HVACMode.HEAT
 
     @property
-    def hvac_action(self) -> HVACAction | None:
-        """Return current HVAC action (heating vs idle)."""
-        if self.coordinator.data:
-            if self.coordinator.data.get("zone1_active"):
-                return HVACAction.HEATING
-            return HVACAction.IDLE
-        return None
-
-    @property
     def current_temperature(self) -> float | None:
-        """Return current zone 1 water temperature."""
+        """Return water circuit temperature from C0 response."""
         if self.coordinator.data:
-            # Prefer basic body zone1_water_temp, fall back to C0 t2_water_circuit
-            return (
-                self.coordinator.data.get("zone1_water_temp")
-                or self.coordinator.data.get("t2_water_circuit")
-            )
+            return self.coordinator.data.get("t2_water_circuit")
         return None
 
     @property
     def target_temperature(self) -> float | None:
-        """Return zone 1 target temperature."""
-        if self.coordinator.data:
-            return self.coordinator.data.get("zone1_target_temp")
-        return None
+        """Return last-set zone 1 target (assumed state, not readable)."""
+        return self._target_temp
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set the zone 1 target temperature."""
@@ -82,7 +68,8 @@ class MideaZone1Climate(MideaHeatPumpEntity, ClimateEntity):
             await self.hass.async_add_executor_job(
                 self.coordinator.device.set_attribute, "zone1_target_temp", temp
             )
-            await self.coordinator.async_request_refresh()
+            self._target_temp = float(temp)
+            self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """HVAC mode is fixed to HEAT (no power toggle available)."""

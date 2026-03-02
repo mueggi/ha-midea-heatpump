@@ -37,37 +37,6 @@ SENSOR_DESCRIPTIONS = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     ),
-    SensorEntityDescription(
-        key="tank_actual_temp",
-        name="Tank Temperature (Basic)",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-    ),
-    SensorEntityDescription(
-        key="outdoor_temp",
-        name="Outdoor Temperature (Basic)",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-    ),
-    SensorEntityDescription(
-        key="zone1_water_temp",
-        name="Zone 1 Water Temperature",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-    ),
-    SensorEntityDescription(
-        key="mode_str",
-        name="Operating Mode",
-        icon="mdi:thermostat",
-    ),
-    SensorEntityDescription(
-        key="error_code",
-        name="Error Code",
-        icon="mdi:alert-circle-outline",
-    ),
 ]
 
 

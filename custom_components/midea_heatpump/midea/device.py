@@ -12,7 +12,6 @@ from .security import (
     MSGTYPE_ENCRYPTED_REQUEST,
 )
 from .message import (
-    build_query_basic,
     build_query_status,
     build_set_command,
     build_set_eco,
@@ -206,16 +205,6 @@ class MideaATWDevice:
                 if r.get("body_type") == 0xC0:
                     state.update(r)
                     break
-
-            # Basic status (target temps with accurate encoding)
-            try:
-                responses = self._send_and_receive(build_query_basic())
-                for r in responses:
-                    if r.get("body_type") == 0x01:
-                        state.update(r)
-                        break
-            except (ConnectionError, OSError):
-                _LOGGER.debug("Basic query failed, using C0 data only")
 
             return state
 
