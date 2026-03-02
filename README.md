@@ -14,9 +14,9 @@ Other Midea ATW heat pumps using device type 0xC3 may work but are untested.
 | Entity | Platform | Read | Write | Notes |
 |--------|----------|------|-------|-------|
 | DHW Water Heater | `water_heater` | Current + target temp | Target temp | Confirmed working |
+| Heating Target Temperature | `number` | Yes | Yes | Heating water flow target (25–55°C) |
 | DHW Tank Temperature | `sensor` | Yes | - | Live sensor |
 | Water Circuit Temperature | `sensor` | Yes | - | Live sensor |
-| Outdoor Temperature | `sensor` | Yes | - | Live sensor |
 | Zone 1 Target Temperature | `number` | - | Yes | Assumed state |
 | ECO Mode | `switch` | - | Yes | Assumed state |
 | Silent Mode | `switch` | - | Yes | Assumed state |
@@ -90,7 +90,10 @@ If cloud login is not available, you can enter connection details manually. You'
 - Power-cycling the heat pump controller can help if connections are stuck
 
 **Temperature values seem wrong:**
-- This device uses XC0 encoding (value = (raw - 50) / 2). If you see raw byte values instead of temperatures, something went wrong with the response parsing.
+- Sensor temps use XC0 encoding: `(raw - 50) / 2`
+- DHW target uses linear encoding: `raw - 99`
+- Heating target uses: `raw / 2 + 9`
+- If you see raw byte values instead of temperatures, something went wrong with the response parsing.
 
 ## License
 
