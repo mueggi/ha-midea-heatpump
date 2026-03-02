@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Midea ATW Heat Pump",
+        "description": "Enter connection details. Get token and key using the midea_cli.py tool.",
+        "data": {
+          "host": "IP Address",
+          "port": "Port",
+          "device_id": "Device ID",
+          "token": "Token (hex)",
+          "key": "Key (hex)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to device. Check IP, token, and key."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  }
+}
