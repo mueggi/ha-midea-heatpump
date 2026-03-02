@@ -103,33 +103,51 @@ def build_query_appliance() -> bytes:
 
 # -- C3 Set Messages --
 
+def _encode_temp_heat(temp: float) -> int:
+    """Encode heating water flow target: raw = (temp - 9) * 2.
+
+    Verified: 39°C→60, 42°C→66, 47°C→76. Readable back from C0 byte[18].
+    """
+    return int((temp - 9) * 2) & 0xFF
+
+
+def _decode_temp_heat(value: int) -> float | None:
+    """Decode heating water flow target: temp = raw / 2 + 9.
+
+    C0 byte[18]. NOT XC0 encoding. Previously misidentified as outdoor temp.
+    Verified: raw=60→39°C, raw=66→42°C, raw=76→47°C.
+    """
+    if value == 0xFF or value == 0x00:
+        return None
+    return value / 2 + 9
+
+
 def build_set_command(
     dhw_target_temp: float | None = None,
+    heat_target_temp: float | None = None,
     zone1_target_temp: float | None = None,
     zone2_target_temp: float | None = None,
     room_target_temp: float | None = None,
-    outdoor_temp: float | None = None,
     flags: int = 0x43,
 ) -> bytes:
     """Build SET command (body_type=0x40, protocol_ver=3).
 
-    Confirmed working via Frida capture of NetHome Plus app.
     DHW target (byte 2) uses linear encoding: raw = temp + 99.
-    Zone targets (bytes 4/5) use XC0 encoding: raw = temp * 2 + 50.
-    Outdoor echo (byte 18) uses XC0 encoding: raw = temp * 2 + 50.
-    Pass None for any temp to send the 0x7F "no change" sentinel.
+    Heating target (byte 18) uses encoding: raw = (temp - 9) * 2.
+    Zone targets (bytes 4/5) unverified -- device accepts but effect unknown.
+    Pass None for any temp to send 0x00 (no change).
 
     Body layout (26 bytes):
         [0]  = 0x40 body_type
         [1]  = flags (default 0x43: bits 0,1,6)
-        [2]  = DHW target (linear, temp + 99) or 0x7F
+        [2]  = DHW target (linear, temp + 99) or 0x00
         [3]  = 0x00
-        [4]  = zone1 target (XC0, offset 50) or 0x7F
-        [5]  = zone2 target (XC0, offset 50) or 0x7F
+        [4]  = zone1 target (encoding unverified) or 0x00
+        [5]  = zone2 target (encoding unverified) or 0x00
         [6]  = 0x00
         [7]  = room target (temp * 2) or 0x00
         [8-17] = zeros
-        [18] = outdoor temp echo (XC0, offset 50) or 0x00
+        [18] = heating water flow target (raw = (temp-9)*2) or 0x00
         [19-23] = zeros
         [24] = 0x05
         [25] = 0x00
@@ -137,12 +155,11 @@ def build_set_command(
     body = bytearray(26)
     body[0] = 0x40
     body[1] = flags & 0xFF
-    body[2] = _encode_temp_target(dhw_target_temp) if dhw_target_temp is not None else NO_CHANGE
-    body[4] = _encode_temp_xc0(zone1_target_temp) if zone1_target_temp is not None else NO_CHANGE
-    body[5] = _encode_temp_xc0(zone2_target_temp) if zone2_target_temp is not None else NO_CHANGE
+    body[2] = _encode_temp_target(dhw_target_temp) if dhw_target_temp is not None else 0x00
+    body[4] = int(zone1_target_temp) & 0xFF if zone1_target_temp is not None else 0x00
+    body[5] = int(zone2_target_temp) & 0xFF if zone2_target_temp is not None else 0x00
     body[7] = int(room_target_temp * 2) & 0xFF if room_target_temp is not None else 0x00
-    if outdoor_temp is not None:
-        body[18] = _encode_temp_xc0(outdoor_temp)
+    body[18] = _encode_temp_heat(heat_target_temp) if heat_target_temp is not None else 0x00
     body[24] = 0x05
     return build_frame(DEVICE_TYPE_C3, MessageType.SET, bytes(body), protocol_ver=3)
 
@@ -452,10 +469,10 @@ def parse_c0_status_body(body: bytes) -> dict:
         [1]     = 0x01 sub-type (bit 0 = power)
         [2]     = DHW target temperature (linear: value - 99)
         [3-10]  = zeros (unused zone/feature fields)
-        [11]    = T1: DHW tank temperature (live sensor, drifts)
-        [12]    = T2: water circuit temperature (live sensor, drifts)
+        [11]    = T1: DHW tank temperature (XC0 sensor, drifts)
+        [12]    = T2: water circuit temperature (XC0 sensor, drifts)
         [13-17] = zeros
-        [18]    = T3: outdoor temperature (stable)
+        [18]    = heating water flow target (raw/2 + 9, NOT XC0)
         [19-22] = zeros
         [23-24] = counter/CRC (not temperature)
     """
@@ -468,7 +485,7 @@ def parse_c0_status_body(body: bytes) -> dict:
     # byte[1]: power/sub-type
     state["power"] = bool(body[1] & 0x01)
 
-    # byte[2]: DHW target temperature (offset 52, not 50)
+    # byte[2]: DHW target temperature (linear: value - 99)
     state["dhw_target_temp"] = _decode_temp_target(body[2])
     state["dhw_target_raw"] = body[2]
 
@@ -477,8 +494,11 @@ def parse_c0_status_body(body: bytes) -> dict:
         state["t1_dhw_tank"] = _decode_temp_xc0(body[11])
     if len(body) > 12 and body[12] != 0x00:
         state["t2_water_circuit"] = _decode_temp_xc0(body[12])
+
+    # byte[18]: heating water flow target (NOT outdoor temp, NOT XC0)
     if len(body) > 18 and body[18] != 0x00:
-        state["t3_outdoor"] = _decode_temp_xc0(body[18])
+        state["heat_target_temp"] = _decode_temp_heat(body[18])
+        state["heat_target_raw"] = body[18]
 
     # bytes[3-10], [13-17], [19-22]: report any non-zero values
     for i in [3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 19, 20, 21, 22]:
