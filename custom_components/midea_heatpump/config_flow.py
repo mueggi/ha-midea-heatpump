@@ -61,6 +61,7 @@ class MideaHeatPumpConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._cloud_devices: list[dict] = []
         self._selected_device: dict = {}
+        self._token_candidates: list[tuple[str, str]] = []
         self._token: str = ""
         self._key: str = ""
 
@@ -150,27 +151,23 @@ class MideaHeatPumpConfigFlow(ConfigFlow, domain=DOMAIN):
                     self._selected_device = dev
                     break
 
-            # Retrieve token and key
+            # Retrieve token/key candidates for both endians
             try:
                 from msmart.lan import Security
 
                 device_id = int(device_id_str)
-                # Try both endians like msmart-ng discovery does
-                token = None
-                key = None
+                self._token_candidates = []
                 for endian in ("little", "big"):
                     try:
                         udpid = Security.udpid(
                             device_id.to_bytes(6, endian)
                         ).hex()
                         token, key = await self._cloud.get_token(udpid)
-                        break
+                        self._token_candidates.append((token, key))
                     except Exception:
                         continue
 
-                if token and key:
-                    self._token = token
-                    self._key = key
+                if self._token_candidates:
                     return await self.async_step_network()
 
                 errors["base"] = "token_failed"
@@ -202,38 +199,50 @@ class MideaHeatPumpConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             device_id = int(self._selected_device.get("id"))
-            try:
-                device = MideaATWDevice(
-                    ip=user_input[CONF_HOST],
-                    port=user_input[CONF_PORT],
-                    device_id=device_id,
-                    token=self._token,
-                    key=self._key,
-                )
-                await self.hass.async_add_executor_job(device.connect)
-                data = await self.hass.async_add_executor_job(device.query_status)
-                await self.hass.async_add_executor_job(device.close)
 
-                if not data:
-                    errors["base"] = "cannot_connect"
-                else:
-                    await self.async_set_unique_id(str(device_id))
-                    self._abort_if_unique_id_configured()
-                    return self.async_create_entry(
-                        title=self._selected_device.get(
-                            "name", "Midea ATW Heat Pump"
-                        ),
-                        data={
-                            CONF_HOST: user_input[CONF_HOST],
-                            CONF_PORT: user_input[CONF_PORT],
-                            CONF_DEVICE_ID: device_id,
-                            CONF_TOKEN: self._token,
-                            CONF_KEY: self._key,
-                        },
+            # Try each token/key candidate until one connects
+            for token, key in self._token_candidates:
+                try:
+                    device = MideaATWDevice(
+                        ip=user_input[CONF_HOST],
+                        port=user_input[CONF_PORT],
+                        device_id=device_id,
+                        token=token,
+                        key=key,
                     )
-            except Exception:
-                _LOGGER.exception("Failed to connect to Midea heat pump")
-                errors["base"] = "cannot_connect"
+                    await self.hass.async_add_executor_job(device.connect)
+                    data = await self.hass.async_add_executor_job(
+                        device.query_status
+                    )
+                    await self.hass.async_add_executor_job(device.close)
+
+                    if data:
+                        self._token = token
+                        self._key = key
+                        await self.async_set_unique_id(str(device_id))
+                        self._abort_if_unique_id_configured()
+                        return self.async_create_entry(
+                            title=self._selected_device.get(
+                                "name", "Midea ATW Heat Pump"
+                            ),
+                            data={
+                                CONF_HOST: user_input[CONF_HOST],
+                                CONF_PORT: user_input[CONF_PORT],
+                                CONF_DEVICE_ID: device_id,
+                                CONF_TOKEN: token,
+                                CONF_KEY: key,
+                            },
+                        )
+                except Exception:
+                    _LOGGER.debug(
+                        "Token candidate failed for device %s", device_id
+                    )
+                    continue
+
+            _LOGGER.error(
+                "All token candidates failed for device %s", device_id
+            )
+            errors["base"] = "cannot_connect"
 
         return self.async_show_form(
             step_id="network",
