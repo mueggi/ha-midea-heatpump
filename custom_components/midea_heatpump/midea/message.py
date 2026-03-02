@@ -114,20 +114,21 @@ def build_set_command(
     """Build SET command (body_type=0x40, protocol_ver=3).
 
     Confirmed working via Frida capture of NetHome Plus app.
-    Uses XC0 temperature encoding (raw = temp * 2 + 50).
+    Setpoint temps use offset 52 (raw = temp * 2 + 52).
+    Sensor echo (outdoor) uses offset 50 (raw = temp * 2 + 50).
     Pass None for any temp to send the 0x7F "no change" sentinel.
 
     Body layout (26 bytes):
         [0]  = 0x40 body_type
         [1]  = flags (default 0x43: bits 0,1,6)
-        [2]  = DHW target (XC0) or 0x7F
+        [2]  = DHW target (offset 52) or 0x7F
         [3]  = 0x00
-        [4]  = zone1 target (XC0) or 0x7F
-        [5]  = zone2 target (XC0) or 0x7F
+        [4]  = zone1 target (offset 52) or 0x7F
+        [5]  = zone2 target (offset 52) or 0x7F
         [6]  = 0x00
         [7]  = room target (temp * 2) or 0x00
         [8-17] = zeros
-        [18] = outdoor temp echo (XC0) or 0x00
+        [18] = outdoor temp echo (offset 50) or 0x00
         [19-23] = zeros
         [24] = 0x05
         [25] = 0x00
@@ -135,9 +136,9 @@ def build_set_command(
     body = bytearray(26)
     body[0] = 0x40
     body[1] = flags & 0xFF
-    body[2] = _encode_temp_xc0(dhw_target_temp) if dhw_target_temp is not None else NO_CHANGE
-    body[4] = _encode_temp_xc0(zone1_target_temp) if zone1_target_temp is not None else NO_CHANGE
-    body[5] = _encode_temp_xc0(zone2_target_temp) if zone2_target_temp is not None else NO_CHANGE
+    body[2] = _encode_temp_target(dhw_target_temp) if dhw_target_temp is not None else NO_CHANGE
+    body[4] = _encode_temp_target(zone1_target_temp) if zone1_target_temp is not None else NO_CHANGE
+    body[5] = _encode_temp_target(zone2_target_temp) if zone2_target_temp is not None else NO_CHANGE
     body[7] = int(room_target_temp * 2) & 0xFF if room_target_temp is not None else 0x00
     if outdoor_temp is not None:
         body[18] = _encode_temp_xc0(outdoor_temp)
@@ -414,20 +415,37 @@ def _decode_temp_xc0(value: int) -> float | None:
 
 
 def _encode_temp_xc0(temp: float) -> int:
-    """Encode temperature to XC0 format: raw = temp * 2 + 50."""
+    """Encode sensor temperature to XC0 format: raw = temp * 2 + 50."""
     return int(temp * 2 + 50) & 0xFF
+
+
+def _decode_temp_target(value: int) -> float | None:
+    """Decode setpoint temperature: (value - 52) / 2.
+
+    Target/setpoint bytes (DHW target, zone targets) use offset 52, NOT 50.
+    Verified: C0 byte[2] raw=146 with controller showing 47°C → (146-52)/2=47.
+    """
+    if value == 0xFF or value == 0x00:
+        return None
+    return (value - 52) / 2
+
+
+def _encode_temp_target(temp: float) -> int:
+    """Encode setpoint temperature: raw = temp * 2 + 52."""
+    return int(temp * 2 + 52) & 0xFF
 
 
 def parse_c0_status_body(body: bytes) -> dict:
     """Parse the non-standard 0xC0 status response from this heat pump.
 
     This device responds to SET (msg_type=0x02) with a 25-byte 0xC0 body.
-    Temperature encoding: (value - 50) / 2 (same as AC XC0MessageBody).
+    Sensor temps use offset 50: (value - 50) / 2.
+    Setpoint temps use offset 52: (value - 52) / 2.
 
     Confirmed byte map:
         [0]     = 0xC0 body_type
         [1]     = 0x01 sub-type (bit 0 = power)
-        [2]     = DHW target temperature (XC0 encoding: (value-50)/2 C)
+        [2]     = DHW target temperature (offset 52: (value-52)/2 C)
         [3-10]  = zeros (unused zone/feature fields)
         [11]    = T1: DHW tank temperature (live sensor, drifts)
         [12]    = T2: water circuit temperature (live sensor, drifts)
@@ -445,8 +463,8 @@ def parse_c0_status_body(body: bytes) -> dict:
     # byte[1]: power/sub-type
     state["power"] = bool(body[1] & 0x01)
 
-    # byte[2]: DHW target temperature (XC0 encoding)
-    state["dhw_target_temp"] = _decode_temp_xc0(body[2])
+    # byte[2]: DHW target temperature (offset 52, not 50)
+    state["dhw_target_temp"] = _decode_temp_target(body[2])
     state["dhw_target_raw"] = body[2]
 
     # Temperature sensors (using XC0 encoding: (v-50)/2)
