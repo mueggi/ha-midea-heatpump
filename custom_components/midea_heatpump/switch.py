@@ -1,4 +1,4 @@
-"""Switch platform for Midea ATW Heat Pump (ECO, Turbo)."""
+"""Switch platform for Midea ATW Heat Pump (ECO, Silent, Disinfect)."""
 
 import logging
 
@@ -23,12 +23,13 @@ async def async_setup_entry(
     coordinator: MideaHeatPumpCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
         MideaEcoSwitch(coordinator),
-        MideaTurboSwitch(coordinator),
+        MideaSilentSwitch(coordinator),
+        MideaDisinfectSwitch(coordinator),
     ])
 
 
 class MideaEcoSwitch(MideaHeatPumpEntity, SwitchEntity):
-    """ECO mode switch (assumed state -- build_set_eco exists but response unverified)."""
+    """ECO mode switch (assumed state -- device accepts command but can't read back)."""
 
     _attr_assumed_state = True
 
@@ -53,31 +54,53 @@ class MideaEcoSwitch(MideaHeatPumpEntity, SwitchEntity):
         self.async_write_ha_state()
 
 
-class MideaTurboSwitch(MideaHeatPumpEntity, SwitchEntity):
-    """Turbo DHW switch (assumed state -- SET command undecoded).
-
-    Needs more Frida captures to implement the actual SET command.
-    Currently only updates the assumed state in HA.
-    """
+class MideaSilentSwitch(MideaHeatPumpEntity, SwitchEntity):
+    """Silent mode switch (assumed state -- device accepts command but can't read back)."""
 
     _attr_assumed_state = True
 
     def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:
-        super().__init__(coordinator, "fast_dhw", "Turbo DHW")
+        super().__init__(coordinator, "silent_mode", "Silent Mode")
         self._attr_is_on = False
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Turn on Turbo DHW (stub -- only updates assumed state)."""
-        _LOGGER.warning(
-            "Turbo DHW control not yet implemented. Setting assumed state only."
+        """Turn on silent mode."""
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_attribute, "silent_mode", True
         )
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Turn off Turbo DHW (stub -- only updates assumed state)."""
-        _LOGGER.warning(
-            "Turbo DHW control not yet implemented. Setting assumed state only."
+        """Turn off silent mode."""
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_attribute, "silent_mode", False
+        )
+        self._attr_is_on = False
+        self.async_write_ha_state()
+
+
+class MideaDisinfectSwitch(MideaHeatPumpEntity, SwitchEntity):
+    """Disinfect mode switch (assumed state -- device accepts command but can't read back)."""
+
+    _attr_assumed_state = True
+
+    def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:
+        super().__init__(coordinator, "disinfect", "Disinfect")
+        self._attr_is_on = False
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Turn on disinfect mode."""
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_attribute, "disinfect", True
+        )
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Turn off disinfect mode."""
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_attribute, "disinfect", False
         )
         self._attr_is_on = False
         self.async_write_ha_state()
