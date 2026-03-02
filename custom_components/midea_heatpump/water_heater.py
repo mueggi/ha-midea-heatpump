@@ -37,7 +37,7 @@ class MideaDHWWaterHeater(MideaHeatPumpEntity, WaterHeaterEntity):
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_min_temp = MIN_DHW_TEMP
     _attr_max_temp = MAX_DHW_TEMP
-    _attr_target_temperature_step = 0.5
+    _attr_target_temperature_step = 1
     _attr_operation_list = [STATE_HEAT_PUMP, STATE_OFF]
 
     def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:

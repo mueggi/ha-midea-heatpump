@@ -26,9 +26,8 @@ async def async_setup_entry(
 
 
 class MideaZone1TargetNumber(MideaHeatPumpEntity, NumberEntity):
-    """Zone 1 heating target temperature (assumed state -- not readable from device)."""
+    """Zone 1 heating target temperature."""
 
-    _attr_assumed_state = True
     _attr_device_class = NumberDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_native_min_value = MIN_ZONE_TEMP
@@ -38,12 +37,17 @@ class MideaZone1TargetNumber(MideaHeatPumpEntity, NumberEntity):
 
     def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:
         super().__init__(coordinator, "zone1_target_temp", "Zone 1 Target Temperature")
-        self._attr_native_value = 35.0  # Default assumed value
+
+    @property
+    def native_value(self) -> float | None:
+        """Return zone 1 target temperature from device data."""
+        if self.coordinator.data:
+            return self.coordinator.data.get("zone1_target_temp")
+        return None
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the zone 1 target temperature (untested -- assumed state)."""
+        """Set the zone 1 target temperature."""
         await self.hass.async_add_executor_job(
             self.coordinator.device.set_attribute, "zone1_target_temp", value
         )
-        self._attr_native_value = value
-        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
