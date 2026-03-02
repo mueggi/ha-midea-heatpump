@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from .coordinator import MideaHeatPumpCoordinator
 
-PLATFORMS = ["climate", "water_heater", "sensor", "switch"]
+PLATFORMS = ["climate", "number", "water_heater", "sensor", "switch"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

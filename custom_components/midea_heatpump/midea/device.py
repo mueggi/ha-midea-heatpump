@@ -211,23 +211,22 @@ class MideaATWDevice:
     def set_attribute(self, name: str, value) -> dict:
         """Set a device attribute. Returns response dict. Thread-safe.
 
-        IMPORTANT: 0x7F is NOT a safe "no change" sentinel for this device.
-        It gets interpreted as a temperature value and overwrites DHW target.
-        We always echo the current DHW target when setting other fields.
+        Always echoes current DHW and heating targets to prevent zeroing.
         """
         with self._lock:
-            if name in ("dhw_target_temp", "zone1_target_temp"):
-                # Query current state to echo DHW + outdoor temp
+            if name in ("dhw_target_temp", "heat_target_temp"):
+                # Query current state to echo both targets
                 current = self._query_current_state()
                 kwargs = {name: float(value)}
-                # Always echo current DHW to prevent overwrite
+                # Always echo the other target to prevent it being zeroed
                 if name != "dhw_target_temp":
                     dhw = current.get("dhw_target_temp")
                     if dhw is not None:
                         kwargs["dhw_target_temp"] = dhw
-                outdoor = current.get("t3_outdoor")
-                if outdoor is not None:
-                    kwargs["outdoor_temp"] = outdoor
+                if name != "heat_target_temp":
+                    heat = current.get("heat_target_temp")
+                    if heat is not None:
+                        kwargs["heat_target_temp"] = heat
                 cmd = build_set_command(**kwargs)
 
             elif name == "eco_mode":
