@@ -46,6 +46,8 @@ class MideaHeatPumpCoordinator(DataUpdateCoordinator[dict]):
 
         Returns cached data on transient failures to avoid entity flickering.
         Only raises UpdateFailed after MAX_FAILURES consecutive failures.
+        On every failure that is a multiple of MAX_FAILURES, force a fresh
+        reconnect to recover from stale connection state.
         """
         try:
             data = await self.hass.async_add_executor_job(self.device.query_status)
@@ -57,7 +59,16 @@ class MideaHeatPumpCoordinator(DataUpdateCoordinator[dict]):
             raise ConnectionError("Empty response from device")
         except Exception as err:
             self._consecutive_failures += 1
-            if self._consecutive_failures >= self.MAX_FAILURES:
+            if self._consecutive_failures % self.MAX_FAILURES == 0:
+                _LOGGER.warning(
+                    "Device unreachable after %d attempts, forcing fresh reconnect: %s",
+                    self._consecutive_failures,
+                    err,
+                )
+                try:
+                    await self.hass.async_add_executor_job(self.device.connect)
+                except Exception as reconn_err:
+                    _LOGGER.debug("Reconnect failed: %s", reconn_err)
                 raise UpdateFailed(
                     f"Device unreachable after {self._consecutive_failures} attempts: {err}"
                 ) from err

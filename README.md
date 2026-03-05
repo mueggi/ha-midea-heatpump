@@ -14,10 +14,10 @@ Other Midea ATW heat pumps using device type 0xC3 may work but are untested.
 | Entity | Platform | Read | Write | Notes |
 |--------|----------|------|-------|-------|
 | DHW Water Heater | `water_heater` | Current + target temp | Target temp | Confirmed working |
-| Heating Target Temperature | `number` | Yes | Yes | Heating water flow target (25–55°C) |
+| Heating | `climate` | Current + target temp | Target temp | Heating water flow target (25–55°C) |
 | DHW Tank Temperature | `sensor` | Yes | - | Live sensor |
 | Water Circuit Temperature | `sensor` | Yes | - | Live sensor |
-| Zone 1 Target Temperature | `number` | - | Yes | Assumed state |
+| Outdoor Temperature | `sensor` | Yes | - | Live sensor |
 | ECO Mode | `switch` | - | Yes | Assumed state |
 | Silent Mode | `switch` | - | Yes | Assumed state |
 | Disinfect | `switch` | - | Yes | Assumed state |
@@ -73,7 +73,8 @@ If cloud login is not available, you can enter connection details manually. You'
 - Connects directly to the heat pump controller over TCP (port 6444)
 - Uses the M-Smart 8370 protocol with AES encryption for the session
 - Polls device status every 30 seconds via a persistent connection
-- Auto-reconnects on connection failure
+- Auto-reconnects on connection failure with resilient retry logic
+- Forces a fresh reconnect after 3 consecutive poll failures to recover from stale connections
 - All communication is local — no cloud dependency after obtaining the initial token/key
 
 ## Troubleshooting
@@ -86,7 +87,8 @@ If cloud login is not available, you can enter connection details manually. You'
 
 **Entities show "unavailable":**
 - Check Home Assistant logs for `midea_heatpump` errors
-- The device may have dropped the TCP connection — it should auto-reconnect within 30s
+- The device may have dropped the TCP connection — it should auto-reconnect within 90s (3 poll cycles)
+- If auto-recovery fails, reload the integration from **Settings > Devices & Services**
 - Power-cycling the heat pump controller can help if connections are stuck
 
 **Temperature values seem wrong:**
@@ -94,6 +96,17 @@ If cloud login is not available, you can enter connection details manually. You'
 - DHW target uses linear encoding: `raw - 99`
 - Heating target uses: `raw / 2 + 9`
 - If you see raw byte values instead of temperatures, something went wrong with the response parsing.
+
+## Development
+
+### Running Tests
+
+```bash
+pip install pycryptodome pytest pytest-asyncio
+python -m pytest tests/ -v
+```
+
+Tests cover the protocol layer (message building/parsing, encryption, 8370 framing), device connection lifecycle, and coordinator retry logic — all without requiring Home Assistant or a physical device.
 
 ## License
 

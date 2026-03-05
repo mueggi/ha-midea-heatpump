@@ -113,20 +113,30 @@ class MideaATWDevice:
                 self._sock.close()
             except OSError:
                 pass
+            self._sock = None
 
         self._security = LocalSecurity()
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(3.0)
-        self._sock.connect((self._ip, self._port))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3.0)
+        try:
+            sock.connect((self._ip, self._port))
 
-        request = self._security.encode_8370(self._token, MSGTYPE_HANDSHAKE_REQUEST)
-        self._sock.send(request)
+            request = self._security.encode_8370(self._token, MSGTYPE_HANDSHAKE_REQUEST)
+            sock.send(request)
 
-        response = self._sock.recv(1024)
-        if not response:
-            raise ConnectionError("No handshake response received")
+            response = sock.recv(1024)
+            if not response:
+                raise ConnectionError("No handshake response received")
 
-        self._security.tcp_key(response, self._key)
+            self._security.tcp_key(response, self._key)
+        except Exception:
+            try:
+                sock.close()
+            except OSError:
+                pass
+            raise
+
+        self._sock = sock
         _LOGGER.debug("Connected to %s:%s", self._ip, self._port)
 
     def close(self) -> None:
