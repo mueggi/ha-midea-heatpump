@@ -21,6 +21,7 @@ from custom_components.midea_heatpump.midea.message import (
     build_set_silent,
     build_set_eco,
     build_set_disinfect,
+    build_set_power_mode,
     parse_response,
     parse_basic_body,
     parse_energy_body,
@@ -252,6 +253,70 @@ class TestSetCommands:
         body = parsed["body"]
         assert body[0] == 0x09
         assert body[1] == 1
+
+    def test_set_power_mode_dhw_only(self):
+        """Test build_set_power_mode for DHW only."""
+        # Default temp 47°C → lower nibble = 2, mode=7 → 0x72
+        frame = build_set_power_mode(power=True, mode="dhw")
+        parsed = parse_frame(frame)
+        body = parsed["body"]
+        assert body[0] == 0x40  # body_type
+        assert body[1] == 0x01  # power ON
+        assert body[2] == 0x72  # DHW only mode (7) + temp 47 (2)
+
+    def test_set_power_mode_heat_only(self):
+        """Test build_set_power_mode for Heat only."""
+        # Default temp 47°C → lower nibble = 2, mode=5 → 0x52
+        frame = build_set_power_mode(power=True, mode="heat")
+        parsed = parse_frame(frame)
+        body = parsed["body"]
+        assert body[0] == 0x40  # body_type
+        assert body[1] == 0x01  # power ON
+        assert body[2] == 0x52  # Heat only mode (5) + temp 47 (2)
+
+    def test_set_power_mode_heat_dhw(self):
+        """Test build_set_power_mode for Heat + DHW."""
+        # Default temp 47°C → lower nibble = 2, mode=9 → 0x92
+        frame = build_set_power_mode(power=True, mode="heat_dhw")
+        parsed = parse_frame(frame)
+        body = parsed["body"]
+        assert body[0] == 0x40  # body_type
+        assert body[1] == 0x01  # power ON
+        assert body[2] == 0x92  # Heat+DHW mode (9) + temp 47 (2)
+
+    def test_set_power_mode_off(self):
+        """Test build_set_power_mode for turning off."""
+        frame = build_set_power_mode(power=False, mode="heat_dhw")
+        parsed = parse_frame(frame)
+        body = parsed["body"]
+        assert body[0] == 0x40  # body_type
+        assert body[1] == 0x00  # power OFF
+        assert body[2] == 0x92  # mode preserved with temp
+
+    def test_set_power_mode_default(self):
+        """Test build_set_power_mode defaults to ON and heat_dhw."""
+        frame = build_set_power_mode()
+        parsed = parse_frame(frame)
+        body = parsed["body"]
+        assert body[0] == 0x40  # body_type
+        assert body[1] == 0x01  # power ON (default)
+        assert body[2] == 0x92  # Heat+DHW (9) + default temp 47 (2)
+
+    def test_set_power_mode_with_temps(self):
+        """Test build_set_power_mode with custom temperatures."""
+        frame = build_set_power_mode(
+            power=True, 
+            mode="dhw",
+            dhw_target_temp=50,  # lower nibble = 5
+            heat_target_temp=35,
+        )
+        parsed = parse_frame(frame)
+        body = parsed["body"]
+        assert body[0] == 0x40  # body_type
+        assert body[1] == 0x01  # power ON
+        assert body[2] == 0x75  # DHW mode (7) + temp 50 (5)
+        # Heat target: (35-9)*2 = 52 = 0x34
+        assert body[18] == 0x34
 
 
 # -- Response body parsers --

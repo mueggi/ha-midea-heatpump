@@ -13,6 +13,8 @@ Other Midea ATW heat pumps using device type 0xC3 may work but are untested.
 
 | Entity | Platform | Read | Write | Notes |
 |--------|----------|------|-------|-------|
+| **Power** | `switch` | Yes | Yes | Main power on/off for entire heat pump |
+| **Operating Mode** | `select` | Yes | Yes | DHW Only / Heat Only / Heat + DHW |
 | DHW Water Heater | `water_heater` | Current + target temp | Target temp | Confirmed working |
 | Heating | `climate` | Current + target temp | Target temp | Heating water flow target (25–55°C) |
 | DHW Tank Temperature | `sensor` | Yes | - | Live sensor |
@@ -21,6 +23,22 @@ Other Midea ATW heat pumps using device type 0xC3 may work but are untested.
 | ECO Mode | `switch` | - | Yes | Assumed state |
 | Silent Mode | `switch` | - | Yes | Assumed state |
 | Disinfect | `switch` | - | Yes | Assumed state |
+
+### Operating Modes
+
+The **Operating Mode** selector allows you to control how the heat pump operates:
+
+- **DHW Only**: Domestic hot water production only (zone heating off)
+- **Heat Only**: Space heating only (DHW production off)
+- **Heat + DHW**: Both space heating and domestic hot water (default mode)
+
+### Power Control
+
+The **Power** switch provides a convenient way to turn the entire heat pump on or off:
+- **ON**: Restores operation to Heat + DHW mode
+- **OFF**: Disables all zones and DHW production
+
+**Note**: Individual zone powers (zone1_power, zone2_power, dhw_power) are read from the device and used to determine the current operating mode.
 
 **Assumed state** means the device accepts the SET command but doesn't report the value back in status queries. HA tracks what was last sent.
 

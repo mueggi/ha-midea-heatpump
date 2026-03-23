@@ -12,10 +12,12 @@ from .security import (
 )
 from .message import (
     build_query_status,
+    build_query_basic,
     build_set_command,
     build_set_eco,
     build_set_silent,
     build_set_disinfect,
+    build_set_power_mode,
     parse_response,
 )
 
@@ -214,6 +216,16 @@ class MideaATWDevice:
                     state.update(r)
                     break
 
+            # Basic status (power, mode, zone states) - if available
+            try:
+                responses = self._send_and_receive(build_query_basic())
+                for r in responses:
+                    if r.get("body_type") == 0x01:
+                        state.update(r)
+                        break
+            except (ConnectionError, OSError):
+                pass  # Basic query not critical, continue with C0 data
+
             return state
 
     def set_attribute(self, name: str, value) -> dict:
@@ -245,6 +257,19 @@ class MideaATWDevice:
 
             elif name == "disinfect":
                 cmd = build_set_disinfect(disinfect=bool(value))
+
+            elif name == "power_mode":
+                # Value should be a dict with: power (bool), mode (str: "heat_dhw", "dhw", "heat")
+                if not isinstance(value, dict):
+                    raise ValueError("power_mode value must be a dict")
+                # Query current state to preserve temperatures
+                current = self._query_current_state()
+                cmd = build_set_power_mode(
+                    power=value.get("power", True),
+                    mode=value.get("mode", "heat_dhw"),
+                    dhw_target_temp=int(current.get("dhw_target_temp", 47)),
+                    heat_target_temp=current.get("heat_target_temp", 40.0),
+                )
 
             else:
                 raise ValueError(f"Unsupported attribute: {name}")

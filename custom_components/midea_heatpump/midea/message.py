@@ -22,11 +22,17 @@ def checksum(data: bytes) -> int:
     return (~sum(data[1:]) + 1) & 0xFF
 
 
-def build_frame(device_type: int, msg_type: int, body: bytes, protocol_ver: int = 0) -> bytes:
+def build_frame(device_type: int, msg_type: int, body: bytes, protocol_ver: int = 0, body_type: int | None = None) -> bytes:
     """Build a complete AA-frame with header, body, and checksum.
 
     Frame: [0xAA, length, device_type, 0x00, 0x00, 0x00, 0x00, 0x00, protocol_ver, msg_type, ...body..., checksum]
+
+    If body_type is provided, it's prepended to the body (for SET messages).
     """
+    # Prepend body_type to body if provided
+    if body_type is not None:
+        body = bytes([body_type]) + body
+
     # Header (10 bytes)
     header = bytearray([
         0xAA,
@@ -180,6 +186,63 @@ def build_set_disinfect(disinfect: bool = False) -> bytes:
     """Build Set disinfect (body_type=0x09). 4-byte body."""
     body = bytes([0x09, int(disinfect)]) + bytes(2)
     return build_frame(DEVICE_TYPE_C3, MessageType.SET, body)
+
+
+def build_set_power_mode(
+    power: bool = True,
+    mode: str = "heat_dhw",
+    dhw_target_temp: int = 47,
+    heat_target_temp: float = 40.0,
+) -> bytes:
+    """Build SET command for power and mode control (body_type=0x40).
+
+    Protocol discovered through reverse engineering for MZAU-28HWFN8-QD2W.
+
+    Body structure (26 bytes after body_type, matching build_set_command):
+        - byte 0: flags (0x01 = ON, 0x00 = OFF)
+        - byte 1: mode + DHW temp encoding
+            - Upper nibble: mode (9=Heat+DHW, 7=DHW, 5=Heat)
+            - Lower nibble: DHW temp - 45
+        - bytes 2-17: padding
+        - byte 18: heat target temp ((temp - 9) * 2)
+        - bytes 19-25: padding
+
+    Args:
+        power: True to turn on, False to turn off
+        mode: "heat_dhw", "dhw", or "heat"
+        dhw_target_temp: DHW target temperature (default 47°C)
+        heat_target_temp: Heat target temperature (default 40°C)
+
+    Returns:
+        AA-frame with encrypted payload
+    """
+    # Mode upper nibble encoding
+    mode_nibbles = {
+        "heat_dhw": 0x9,  # Heat + DHW
+        "dhw": 0x7,       # DHW only
+        "heat": 0x5,      # Heat only
+    }
+
+    # Combine mode (upper nibble) with DHW temp (lower nibble = temp - 45)
+    mode_nibble = mode_nibbles.get(mode, 0x9)
+    temp_nibble = int(dhw_target_temp) - 45
+    mode_byte = (mode_nibble << 4) | (temp_nibble & 0x0F)
+
+    # Flags byte
+    flags_byte = 0x01 if power else 0x00
+
+    # Heat target encoding: (temp - 9) * 2
+    heat_byte = _encode_temp_heat(heat_target_temp)
+
+    # Build body (26 bytes, matching build_set_command format)
+    # Note: body_type (0x40) is prepended by build_frame, so our indices are offset by 1
+    body = bytearray(26)
+    body[0] = flags_byte   # Byte 1 after body_type (flags/power)
+    body[1] = mode_byte    # Byte 2 after body_type (mode + DHW temp)
+    body[17] = heat_byte   # Byte 18 after body_type (heat target)
+    body[23] = 0x05        # Byte 24 after body_type
+
+    return build_frame(DEVICE_TYPE_C3, MessageType.SET, bytes(body), protocol_ver=0, body_type=0x40)
 
 
 # -- C3 Response Body Parsers --
@@ -481,12 +544,28 @@ def parse_c0_status_body(body: bytes) -> dict:
 
     state = {}
     state["body_type"] = 0xC0
+    state["body_hex"] = body.hex()  # Include raw bytes for debugging
 
-    # byte[1]: power/sub-type
+    # byte[1]: power/sub-type (bit 0 = power)
     state["power"] = bool(body[1] & 0x01)
 
-    # byte[2]: DHW target temperature (linear: value - 99)
-    state["dhw_target_temp"] = _decode_temp_target(body[2])
+    # byte[2]: mode encoding in bits 7-4
+    # Heat+DHW: 0x8X or 0x9X, DHW only: 0x7X, Heat only: 0x4X or 0x5X
+    mode_byte = body[2]
+    mode_nibble = (mode_byte >> 4) & 0x0F
+    mode_map = {
+        0x08: "heat_dhw",  # 1000 = Heat+DHW
+        0x09: "heat_dhw",  # 1001 = Heat+DHW (via NetHome+)
+        0x07: "dhw",       # 0111 = DHW only
+        0x05: "heat",      # 0101 = Heat only (via NetHome+)
+        0x04: "heat",      # 0100 = Heat only (via SET)
+    }
+    state["mode"] = mode_map.get(mode_nibble, "unknown")
+    state["mode_raw"] = mode_byte
+
+    # byte[2]: DHW target temperature (lower nibble + 45)
+    # Upper nibble contains mode, lower nibble contains temp offset from 45
+    state["dhw_target_temp"] = (body[2] & 0x0F) + 45
     state["dhw_target_raw"] = body[2]
 
     # Temperature sensors (using XC0 encoding: (v-50)/2)

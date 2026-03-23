@@ -14,6 +14,70 @@ from .entity import MideaHeatPumpEntity
 _LOGGER = logging.getLogger(__name__)
 
 
+class MideaPowerSwitch(MideaHeatPumpEntity, SwitchEntity):
+    """Main power switch for the heat pump."""
+
+    def __init__(self, coordinator: MideaHeatPumpCoordinator) -> None:
+        super().__init__(coordinator, "power", "Power")
+        self._attr_is_on = True
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if heat pump is powered on."""
+        if not self.coordinator.data:
+            return self._attr_is_on
+
+        # Power state is now in C0 response byte[1] bit 0
+        return self.coordinator.data.get("power", True)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Turn on heat pump (restore to last mode or Heat+DHW)."""
+        # Get current mode, default to heat_dhw
+        current_mode = "heat_dhw"
+        if self.coordinator.data:
+            mode = self.coordinator.data.get("mode")
+            if mode in ("heat_dhw", "dhw", "heat"):
+                current_mode = mode
+
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_attribute,
+            "power_mode",
+            {
+                "power": True,
+                "mode": current_mode,
+            },
+        )
+        self._attr_is_on = True
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Turn off heat pump."""
+        # Get current mode to preserve it
+        current_mode = "heat_dhw"
+        if self.coordinator.data:
+            mode = self.coordinator.data.get("mode")
+            if mode in ("heat_dhw", "dhw", "heat"):
+                current_mode = mode
+
+        await self.hass.async_add_executor_job(
+            self.coordinator.device.set_attribute,
+            "power_mode",
+            {
+                "power": False,
+                "mode": current_mode,
+            },
+        )
+        self._attr_is_on = False
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def icon(self) -> str:
+        """Return power icon."""
+        return "mdi:power" if self.is_on else "mdi:power-off"
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -22,6 +86,7 @@ async def async_setup_entry(
     """Set up switch entities."""
     coordinator: MideaHeatPumpCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
+        MideaPowerSwitch(coordinator),
         MideaEcoSwitch(coordinator),
         MideaSilentSwitch(coordinator),
         MideaDisinfectSwitch(coordinator),
